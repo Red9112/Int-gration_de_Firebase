@@ -1,11 +1,14 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 import '../../../services/crashlytics_service.dart';
+import '../../database/firestore_service.dart';
 
 class AuthRepository {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn();
+  final FirestoreService _firestoreService = FirestoreService();
 
   /// Get current user
   User? get currentUser => _auth.currentUser;
@@ -37,16 +40,46 @@ class AuthRepository {
   }
 
   /// Register with email and password
+  /// Creates Firebase Auth user AND Firestore document
   Future<UserCredential> registerWithEmailAndPassword({
     required String email,
     required String password,
   }) async {
     try {
+      // 1. Create Firebase Auth user
       final credential = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
-      await CrashlyticsService.setUserIdentifier(credential.user?.uid ?? '');
+
+      final user = credential.user;
+      if (user == null) {
+        throw Exception('Échec de la création de l\'utilisateur');
+      }
+
+      // 2. Create Firestore document for the user
+      try {
+        await _firestoreService.createUserDocument(
+          userId: user.uid,
+          email: email,
+          displayName: user.displayName,
+          photoUrl: user.photoURL,
+          phoneNumber: user.phoneNumber,
+        );
+        debugPrint('✅ [AuthRepository] Document Firestore créé pour l\'utilisateur: ${user.uid}');
+      } catch (firestoreError) {
+        // Log the error but don't fail the registration
+        // The user is already created in Firebase Auth
+        debugPrint('⚠️ [AuthRepository] Erreur lors de la création du document Firestore: $firestoreError');
+        await CrashlyticsService.recordError(
+          firestoreError,
+          StackTrace.current,
+          reason: 'Failed to create Firestore user document after registration',
+        );
+        // Continue anyway - user is authenticated even if Firestore doc creation fails
+      }
+
+      await CrashlyticsService.setUserIdentifier(user.uid);
       return credential;
     } catch (e, stackTrace) {
       await CrashlyticsService.recordError(e, stackTrace);
@@ -127,6 +160,49 @@ class AuthRepository {
       }
 
       debugPrint('✅ [Google Sign-In] SUCCÈS - User ID: ${currentUser.uid}, Email: ${currentUser.email}');
+
+      // Check if this is a new user (first time signing in with Google)
+      // If user document doesn't exist in Firestore, create it
+      final userExists = await _firestoreService.userDocumentExists(currentUser.uid);
+      if (!userExists) {
+        try {
+          await _firestoreService.createUserDocument(
+            userId: currentUser.uid,
+            email: currentUser.email ?? '',
+            displayName: currentUser.displayName,
+            photoUrl: currentUser.photoURL,
+            phoneNumber: currentUser.phoneNumber,
+            additionalData: {
+              'signInMethod': 'google',
+            },
+          );
+          debugPrint('✅ [AuthRepository] Document Firestore créé pour le nouvel utilisateur Google: ${currentUser.uid}');
+        } catch (firestoreError) {
+          // Log the error but don't fail the sign-in
+          debugPrint('⚠️ [AuthRepository] Erreur lors de la création du document Firestore: $firestoreError');
+          await CrashlyticsService.recordError(
+            firestoreError,
+            StackTrace.current,
+            reason: 'Failed to create Firestore user document after Google sign-in',
+          );
+          // Continue anyway - user is authenticated even if Firestore doc creation fails
+        }
+      } else {
+        // Update existing user document with latest info
+        try {
+          await _firestoreService.updateUserDocument(
+            userId: currentUser.uid,
+            data: {
+              'displayName': currentUser.displayName,
+              'photoUrl': currentUser.photoURL,
+              'lastSignInAt': FieldValue.serverTimestamp(),
+            },
+          );
+          debugPrint('✅ [AuthRepository] Document Firestore mis à jour pour l\'utilisateur: ${currentUser.uid}');
+        } catch (firestoreError) {
+          debugPrint('⚠️ [AuthRepository] Erreur lors de la mise à jour du document Firestore: $firestoreError');
+        }
+      }
 
       // Set user identifier for services
       await CrashlyticsService.setUserIdentifier(userCredential.user!.uid);

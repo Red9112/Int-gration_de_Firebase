@@ -14,9 +14,10 @@ Application Flutter avec intégration complète de Firebase incluant l'authentif
   - Service wrapper pour les opérations CRUD
 
 - **Cloud Messaging (FCM)**
-  - Notifications push
+  - Notifications push (Android, iOS, **Web**)
   - Gestion des messages en foreground et background
   - Gestion des tokens FCM
+  - Service Worker pour le web
 
 - **Firebase Analytics**
   - Suivi des événements utilisateur
@@ -126,6 +127,7 @@ lib/
 
 - [Configuration People API pour Web](PEOPLE_API_SETUP.md)
 - [Configuration Google Sign-In pour Android](ANDROID_GOOGLE_SIGNIN_SETUP.md)
+- [Configuration FCM pour le Web](WEB_FCM_SETUP.md)
 
 ## 🛠️ Technologies utilisées
 

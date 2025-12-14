@@ -44,6 +44,9 @@ dependencies:
   firebase_crashlytics: ^4.0.0
   google_sign_in: ^6.0.0
   
+  # Local notifications (for foreground FCM messages)
+  flutter_local_notifications: ^17.0.0
+  
   # State management
   provider: ^6.1.1
 
