@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'data/auth_repository.dart';
 import '../../services/analytics_service.dart';
 import '../../services/crashlytics_service.dart';
+import '../../services/presence_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   final AuthRepository _authRepository = AuthRepository();
@@ -21,6 +22,10 @@ class AuthProvider extends ChangeNotifier {
     if (_user != null) {
       CrashlyticsService.setUserIdentifier(_user!.uid);
       AnalyticsService.setUserId(_user!.uid);
+      // Initialiser la présence si l'utilisateur est déjà connecté
+      PresenceService.initializePresence(_user!).catchError((error) {
+        debugPrint('⚠️ [AuthProvider] Erreur initialisation présence: $error');
+      });
     }
 
     // Listen to auth state changes
@@ -30,14 +35,28 @@ class AuthProvider extends ChangeNotifier {
       
       // Mettre à jour l'utilisateur seulement si c'est différent
       if (_user?.uid != user?.uid) {
+        final previousUserId = _user?.uid;
         _user = user;
         
         if (user != null) {
           // Set user identifier for Crashlytics and Analytics
           CrashlyticsService.setUserIdentifier(user.uid);
           AnalyticsService.setUserId(user.uid);
+          
+          // Initialiser la présence pour le nouvel utilisateur
+          PresenceService.initializePresence(user).catchError((error) {
+            debugPrint('⚠️ [AuthProvider] Erreur initialisation présence: $error');
+          });
         } else {
-          // User déconnecté
+          // User déconnecté - nettoyer la présence
+          if (previousUserId != null) {
+            PresenceService.setUserOffline(previousUserId).catchError((error) {
+              debugPrint('⚠️ [AuthProvider] Erreur mise hors ligne présence: $error');
+            });
+            PresenceService.cleanupPresence().catchError((error) {
+              debugPrint('⚠️ [AuthProvider] Erreur nettoyage présence: $error');
+            });
+          }
           _user = null;
         }
         
@@ -64,6 +83,14 @@ class AuthProvider extends ChangeNotifier {
         email: email,
         password: password,
       );
+
+      // Initialiser la présence après connexion réussie
+      final currentUser = _authRepository.currentUser;
+      if (currentUser != null) {
+        PresenceService.initializePresence(currentUser).catchError((error) {
+          debugPrint('⚠️ [AuthProvider] Erreur initialisation présence après connexion email: $error');
+        });
+      }
 
       await AnalyticsService.logLogin(loginMethod: 'email');
       _isLoading = false;
@@ -166,6 +193,13 @@ class AuthProvider extends ChangeNotifier {
       
       await AnalyticsService.logLogin(loginMethod: 'google');
       
+      // Initialiser la présence après connexion Google réussie
+      if (_user != null) {
+        PresenceService.initializePresence(_user!).catchError((error) {
+          debugPrint('⚠️ [AuthProvider] Erreur initialisation présence après connexion Google: $error');
+        });
+      }
+      
       return true;
     } catch (e) {
       debugPrint('❌ [AuthProvider] Erreur Google Sign-In: $e');
@@ -182,6 +216,13 @@ class AuthProvider extends ChangeNotifier {
     try {
       _isLoading = true;
       notifyListeners();
+
+      // Marquer l'utilisateur comme offline avant la déconnexion
+      final userId = _user?.uid;
+      if (userId != null) {
+        await PresenceService.setUserOffline(userId);
+        await PresenceService.cleanupPresence();
+      }
 
       await _authRepository.signOut();
       _user = null;

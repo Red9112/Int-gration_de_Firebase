@@ -249,3 +249,4 @@ Si le problème persiste après avoir vérifié tous les points ci-dessus :
 3. Indiquez l'état de l'app (foreground/background/terminated)
 4. Indiquez la version Android de l'émulateur/appareil
 
+

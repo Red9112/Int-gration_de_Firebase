@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
+import 'package:firebase_database/firebase_database.dart';
 import '../../auth_provider.dart' as auth;
 import '../../../../services/analytics_service.dart';
+import '../../../../services/presence_service.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -56,6 +58,56 @@ class HomeScreen extends StatelessWidget {
                         color: Colors.grey[600],
                       ),
                 ),
+                const SizedBox(height: 24),
+                // Affichage de la présence utilisateur en temps réel
+                StreamBuilder<DatabaseEvent>(
+                  stream: PresenceService.listenToUserPresence(user.uid),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasData && snapshot.data!.snapshot.exists) {
+                      final data = snapshot.data!.snapshot.value as Map<dynamic, dynamic>;
+                      final isOnline = data['online'] as bool? ?? false;
+                      final lastSeen = data['lastSeen'];
+                      // Utiliser lastSeenFormatted si disponible, sinon formater
+                      final formattedDate = data['lastSeenFormatted'] as String? ?? 
+                                          PresenceService.formatLastSeen(lastSeen);
+
+                      return Card(
+                        margin: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    isOnline ? Icons.circle : Icons.circle_outlined,
+                                    color: isOnline ? Colors.green : Colors.grey,
+                                    size: 16,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    isOnline ? 'En ligne' : 'Hors ligne',
+                                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                          color: isOnline ? Colors.green : Colors.grey,
+                                        ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Dernière connexion: $formattedDate',
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  },
+                ),
               ],
               const SizedBox(height: 32),
               ElevatedButton.icon(
@@ -82,4 +134,5 @@ class HomeScreen extends StatelessWidget {
     );
   }
 }
+
 
