@@ -19,7 +19,7 @@ android {
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
+        jvmTarget = "17"
     }
 
     defaultConfig {
@@ -49,4 +49,10 @@ flutter {
 dependencies {
     // Core library desugaring for flutter_local_notifications
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
+    
+    // Firebase Cloud Messaging
+    implementation("com.google.firebase:firebase-messaging:23.4.0")
+    
+    // AndroidX Core for NotificationCompat
+    implementation("androidx.core:core-ktx:1.12.0")
 }

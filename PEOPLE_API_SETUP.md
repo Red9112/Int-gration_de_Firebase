@@ -69,3 +69,4 @@ Si vous rencontrez toujours des problèmes après avoir activé l'API :
 4. Assurez-vous que les credentials OAuth 2.0 sont correctement configurés dans Firebase Console
 
 
+

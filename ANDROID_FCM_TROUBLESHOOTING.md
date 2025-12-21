@@ -250,3 +250,4 @@ Si le problème persiste après avoir vérifié tous les points ci-dessus :
 4. Indiquez la version Android de l'émulateur/appareil
 
 
+

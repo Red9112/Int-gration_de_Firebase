@@ -26,6 +26,23 @@ class AuthRepository {
         email: email,
         password: password,
       );
+      
+      // Enregistrer l'historique de connexion dans Firestore
+      if (credential.user != null) {
+        try {
+          await _firestoreService.updateUserDocument(
+            userId: credential.user!.uid,
+            data: {
+              'lastSignInAt': FieldValue.serverTimestamp(),
+              'lastSignInMethod': 'email',
+            },
+          );
+          debugPrint('✅ [AuthRepository] Historique de connexion enregistré (email)');
+        } catch (firestoreError) {
+          debugPrint('⚠️ [AuthRepository] Erreur enregistrement historique: $firestoreError');
+        }
+      }
+      
       await CrashlyticsService.setUserIdentifier(credential.user?.uid ?? '');
       return credential;
     } catch (e, stackTrace) {
@@ -65,6 +82,11 @@ class AuthRepository {
           displayName: user.displayName,
           photoUrl: user.photoURL,
           phoneNumber: user.phoneNumber,
+          additionalData: {
+            'signInMethod': 'email',
+            'lastSignInAt': FieldValue.serverTimestamp(),
+            'lastSignInMethod': 'email',
+          },
         );
         debugPrint('✅ [AuthRepository] Document Firestore créé pour l\'utilisateur: ${user.uid}');
       } catch (firestoreError) {
@@ -196,6 +218,7 @@ class AuthRepository {
               'displayName': currentUser.displayName,
               'photoUrl': currentUser.photoURL,
               'lastSignInAt': FieldValue.serverTimestamp(),
+              'lastSignInMethod': 'google',
             },
           );
           debugPrint('✅ [AuthRepository] Document Firestore mis à jour pour l\'utilisateur: ${currentUser.uid}');

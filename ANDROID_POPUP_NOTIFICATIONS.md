@@ -176,3 +176,4 @@ C'est le comportement normal d'Android. Le popup disparaît automatiquement apr�
 Maintenant, toutes les notifications FCM s'affichent comme des **popups en haut de l'écran** sur Android, offrant une meilleure expérience utilisateur avec une visibilité immédiate des notifications importantes.
 
 
+

@@ -23,8 +23,15 @@ class AuthProvider extends ChangeNotifier {
       CrashlyticsService.setUserIdentifier(_user!.uid);
       AnalyticsService.setUserId(_user!.uid);
       // Initialiser la présence si l'utilisateur est déjà connecté
-      PresenceService.initializePresence(_user!).catchError((error) {
-        debugPrint('⚠️ [AuthProvider] Erreur initialisation présence: $error');
+      PresenceService.initializePresence(_user!).then((_) {
+        debugPrint('✅ [AuthProvider] Présence initialisée au démarrage pour: ${_user!.uid}');
+      }).catchError((error, stackTrace) {
+        debugPrint('❌ [AuthProvider] ERREUR initialisation présence au démarrage: $error');
+        CrashlyticsService.recordError(
+          error,
+          stackTrace,
+          reason: 'Failed to initialize presence on startup',
+        );
       });
     }
 
@@ -44,8 +51,16 @@ class AuthProvider extends ChangeNotifier {
           AnalyticsService.setUserId(user.uid);
           
           // Initialiser la présence pour le nouvel utilisateur
-          PresenceService.initializePresence(user).catchError((error) {
-            debugPrint('⚠️ [AuthProvider] Erreur initialisation présence: $error');
+          // Utiliser un Future non-bloquant pour ne pas bloquer le stream
+          PresenceService.initializePresence(user).then((_) {
+            debugPrint('✅ [AuthProvider] Présence initialisée via authStateChanges pour: ${user.uid}');
+          }).catchError((error, stackTrace) {
+            debugPrint('❌ [AuthProvider] ERREUR initialisation présence via authStateChanges: $error');
+            CrashlyticsService.recordError(
+              error,
+              stackTrace,
+              reason: 'Failed to initialize presence via authStateChanges',
+            );
           });
         } else {
           // User déconnecté - nettoyer la présence
@@ -87,9 +102,20 @@ class AuthProvider extends ChangeNotifier {
       // Initialiser la présence après connexion réussie
       final currentUser = _authRepository.currentUser;
       if (currentUser != null) {
-        PresenceService.initializePresence(currentUser).catchError((error) {
-          debugPrint('⚠️ [AuthProvider] Erreur initialisation présence après connexion email: $error');
-        });
+        try {
+          debugPrint('🟢 [AuthProvider] Initialisation présence pour Email Sign-In: ${currentUser.uid}');
+          await PresenceService.initializePresence(currentUser);
+          debugPrint('✅ [AuthProvider] Présence initialisée avec succès pour Email Sign-In');
+        } catch (error, stackTrace) {
+          debugPrint('❌ [AuthProvider] ERREUR initialisation présence après connexion email: $error');
+          debugPrint('❌ [AuthProvider] Stack trace: $stackTrace');
+          // Ne pas faire échouer la connexion si la présence échoue, mais logger l'erreur
+          await CrashlyticsService.recordError(
+            error,
+            stackTrace,
+            reason: 'Failed to initialize presence after email sign-in',
+          );
+        }
       }
 
       await AnalyticsService.logLogin(loginMethod: 'email');
@@ -194,10 +220,25 @@ class AuthProvider extends ChangeNotifier {
       await AnalyticsService.logLogin(loginMethod: 'google');
       
       // Initialiser la présence après connexion Google réussie
+      // IMPORTANT: Attendre l'initialisation pour s'assurer qu'elle se fait correctement
       if (_user != null) {
-        PresenceService.initializePresence(_user!).catchError((error) {
-          debugPrint('⚠️ [AuthProvider] Erreur initialisation présence après connexion Google: $error');
-        });
+        try {
+          debugPrint('🟢 [AuthProvider] Initialisation présence pour Google Sign-In: ${_user!.uid}');
+          debugPrint('🟢 [AuthProvider] Email utilisateur: ${_user!.email ?? "N/A"}');
+          await PresenceService.initializePresence(_user!);
+          debugPrint('✅ [AuthProvider] Présence initialisée avec succès pour Google Sign-In');
+        } catch (error, stackTrace) {
+          debugPrint('❌ [AuthProvider] ERREUR initialisation présence après connexion Google: $error');
+          debugPrint('❌ [AuthProvider] Stack trace: $stackTrace');
+          // Ne pas faire échouer la connexion si la présence échoue, mais logger l'erreur
+          await CrashlyticsService.recordError(
+            error,
+            stackTrace,
+            reason: 'Failed to initialize presence after Google sign-in',
+          );
+        }
+      } else {
+        debugPrint('⚠️ [AuthProvider] _user est null, impossible d\'initialiser la présence');
       }
       
       return true;

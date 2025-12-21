@@ -45,6 +45,9 @@ class PresenceService {
     try {
       if (kDebugMode) {
         debugPrint('🟢 [PresenceService] Initialisation de la présence pour: ${user.uid}');
+        debugPrint('   Email: ${user.email ?? "N/A"}');
+        debugPrint('   DisplayName: ${user.displayName ?? "N/A"}');
+        debugPrint('   Provider: ${user.providerData.map((p) => p.providerId).join(", ")}');
       }
 
       // Nettoyer toute présence précédente si elle existe
@@ -52,6 +55,24 @@ class PresenceService {
 
       // Définir la référence de présence pour cet utilisateur
       _currentPresenceRef = _database.child('presence').child(user.uid);
+
+      // Récupérer l'email avec fallback
+      String email = user.email ?? '';
+      if (email.isEmpty && user.displayName != null) {
+        email = '${user.displayName} (${user.uid.substring(0, 8)})';
+      } else if (email.isEmpty) {
+        email = 'user_${user.uid.substring(0, 8)}';
+      }
+
+      // Récupérer l'email depuis les données actuelles pour l'historique (si existant)
+      final currentSnapshot = await _currentPresenceRef!.child('current').get();
+      if (currentSnapshot.exists) {
+        final currentData = currentSnapshot.value as Map<dynamic, dynamic>?;
+        final existingEmail = currentData?['email']?.toString();
+        if (existingEmail != null && existingEmail.isNotEmpty) {
+          email = existingEmail;
+        }
+      }
 
       // Configurer onDisconnect pour mettre automatiquement offline
       // Cela se déclenche automatiquement en cas de :
@@ -63,14 +84,8 @@ class PresenceService {
       // Générer une clé pour l'historique avant la déconnexion
       final historyKey = _currentPresenceRef!.child('history').push().key;
       
-      // Récupérer l'email depuis les données actuelles pour l'historique
-      final currentSnapshot = await _currentPresenceRef!.child('current').get();
-      String email = '';
-      if (currentSnapshot.exists) {
-        final currentData = currentSnapshot.value as Map<dynamic, dynamic>?;
-        email = currentData?['email']?.toString() ?? user.email ?? '';
-      } else {
-        email = user.email ?? '';
+      if (kDebugMode) {
+        debugPrint('📝 [PresenceService] Configuration onDisconnect avec email: $email');
       }
       
       // Pour onDisconnect, on ne peut pas utiliser de valeurs calculées côté client
@@ -93,10 +108,15 @@ class PresenceService {
 
       // Marquer l'utilisateur comme online
       await setUserOnline(user);
+      
+      if (kDebugMode) {
+        debugPrint('✅ [PresenceService] Initialisation complète pour: ${user.uid}');
+      }
     } catch (e, stackTrace) {
       await CrashlyticsService.recordError(e, stackTrace);
       if (kDebugMode) {
         debugPrint('❌ [PresenceService] Erreur lors de l\'initialisation: $e');
+        debugPrint('   Stack trace: $stackTrace');
       }
       rethrow;
     }
@@ -107,6 +127,13 @@ class PresenceService {
   /// Ajoute une entrée dans l'historique
   static Future<void> setUserOnline(User user) async {
     try {
+      if (kDebugMode) {
+        debugPrint('🟢 [PresenceService] setUserOnline appelé pour: ${user.uid}');
+        debugPrint('   Email: ${user.email ?? "N/A"}');
+        debugPrint('   DisplayName: ${user.displayName ?? "N/A"}');
+        debugPrint('   Provider: ${user.providerData.map((p) => p.providerId).join(", ")}');
+      }
+
       _currentPresenceRef ??= _database.child('presence').child(user.uid);
 
       // Obtenir le timestamp actuel (approximatif côté client)
@@ -114,37 +141,62 @@ class PresenceService {
       final timestampMs = now.millisecondsSinceEpoch;
       final formattedDate = _formatTimestamp(timestampMs);
 
+      // Récupérer l'email, avec fallback sur displayName ou uid si email est null
+      String email = user.email ?? '';
+      if (email.isEmpty && user.displayName != null) {
+        // Si pas d'email mais un displayName, utiliser un identifiant basé sur le displayName
+        email = '${user.displayName} (${user.uid.substring(0, 8)})';
+      } else if (email.isEmpty) {
+        // Dernier recours: utiliser l'uid
+        email = 'user_${user.uid.substring(0, 8)}';
+      }
+
       // Données actuelles
       final currentData = {
         'online': true,
         'lastSeen': ServerValue.timestamp,
         'lastSeenFormatted': formattedDate,
-        'email': user.email ?? '',
+        'email': email,
       };
+
+      if (kDebugMode) {
+        debugPrint('📝 [PresenceService] Écriture dans Realtime Database:');
+        debugPrint('   Path: presence/${user.uid}/current');
+        debugPrint('   Data: $currentData');
+      }
 
       // Mettre à jour les données actuelles
       await _currentPresenceRef!.child('current').set(currentData);
 
       // Ajouter une entrée dans l'historique
       final historyRef = _currentPresenceRef!.child('history').push();
-      await historyRef.set({
+      final historyData = {
         'online': true,
         'timestamp': ServerValue.timestamp,
         'timestampFormatted': formattedDate,
-        'email': user.email ?? '',
-      });
+        'email': email,
+      };
+      
+      if (kDebugMode) {
+        debugPrint('📝 [PresenceService] Ajout entrée historique:');
+        debugPrint('   Path: presence/${user.uid}/history/${historyRef.key}');
+        debugPrint('   Data: $historyData');
+      }
+      
+      await historyRef.set(historyData);
 
       if (kDebugMode) {
         debugPrint('✅ [PresenceService] Utilisateur marqué comme online: ${user.uid}');
-        debugPrint('   Email: ${user.email}');
+        debugPrint('   Email utilisé: $email');
         debugPrint('   Date: $formattedDate');
       }
 
-      await CrashlyticsService.log('User presence set to online: ${user.uid}');
+      await CrashlyticsService.log('User presence set to online: ${user.uid}, email: $email');
     } catch (e, stackTrace) {
       await CrashlyticsService.recordError(e, stackTrace);
       if (kDebugMode) {
         debugPrint('❌ [PresenceService] Erreur lors de la mise en ligne: $e');
+        debugPrint('   Stack trace: $stackTrace');
       }
       rethrow;
     }

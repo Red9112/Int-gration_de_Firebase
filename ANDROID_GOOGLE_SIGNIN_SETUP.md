@@ -120,3 +120,4 @@ Si vous rencontrez toujours des problèmes, vérifiez :
 - Que Google Sign-In est bien activé dans Firebase Console > Authentication > Sign-in method
 
 
+

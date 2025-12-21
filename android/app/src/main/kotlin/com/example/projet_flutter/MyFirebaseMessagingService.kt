@@ -21,9 +21,12 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         Log.d(TAG, "Message ID: ${remoteMessage.messageId}")
 
         // Check if message contains a notification payload
-        remoteMessage.notification?.let {
-            Log.d(TAG, "Message Notification Body: ${it.body}")
-            sendNotification(it.title ?: "Nouvelle notification", it.body ?: "")
+        remoteMessage.notification?.let { notification ->
+            Log.d(TAG, "Message Notification Body: ${notification.body}")
+            sendNotification(
+                notification.title ?: "Nouvelle notification",
+                notification.body ?: ""
+            )
         }
 
         // Also handle data payload if needed
@@ -43,7 +46,9 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         }
         
         val pendingIntent = PendingIntent.getActivity(
-            this, 0, intent,
+            this,
+            0,
+            intent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
@@ -51,13 +56,13 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         val defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
         
         val notificationBuilder = NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(android.R.drawable.ic_dialog_info) // You can change this icon
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle(title)
             .setContentText(messageBody)
             .setAutoCancel(true)
             .setSound(defaultSoundUri)
             .setContentIntent(pendingIntent)
-            .setPriority(NotificationCompat.PRIORITY_MAX) // MAX priority for popup
+            .setPriority(NotificationCompat.PRIORITY_MAX)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setStyle(NotificationCompat.BigTextStyle().bigText(messageBody))
             .setVibrate(longArrayOf(0, 250, 250, 250))
@@ -70,7 +75,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             val channel = NotificationChannel(
                 channelId,
                 "High Importance Notifications",
-                NotificationManager.IMPORTANCE_HIGH // HIGH importance for popup
+                NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "This channel is used for important notifications from Firebase Cloud Messaging. Notifications will appear as popups."
                 enableVibration(true)
