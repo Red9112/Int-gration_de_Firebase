@@ -48,8 +48,8 @@ class FirebaseService {
       try {
         _crashlytics = FirebaseCrashlytics.instance;
         
-        // Only enable Crashlytics in release mode
-        // In debug mode, Crashlytics can cause issues
+        // Enable Crashlytics in release mode
+        // In debug mode, enable it conditionally for testing purposes
         if (!kDebugMode) {
           await _crashlytics!.setCrashlyticsCollectionEnabled(true);
           
@@ -64,8 +64,23 @@ class FirebaseService {
             return true;
           };
         } else {
-          // In debug mode, disable Crashlytics collection to avoid errors
-          await _crashlytics!.setCrashlyticsCollectionEnabled(false);
+          // In debug mode, enable Crashlytics collection for testing
+          // This allows testing crash reports in debug mode
+          await _crashlytics!.setCrashlyticsCollectionEnabled(true);
+          
+          // Set up error handlers for debug mode as well
+          FlutterError.onError = (errorDetails) {
+            _crashlytics?.recordFlutterFatalError(errorDetails);
+          };
+
+          PlatformDispatcher.instance.onError = (error, stack) {
+            _crashlytics?.recordError(error, stack, fatal: true);
+            return true;
+          };
+          
+          if (kDebugMode) {
+            debugPrint('✅ Crashlytics enabled in debug mode for testing');
+          }
         }
       } catch (e) {
         // If Crashlytics fails to initialize, continue without it

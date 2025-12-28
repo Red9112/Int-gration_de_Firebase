@@ -97,11 +97,39 @@ class CrashlyticsService {
     }
   }
 
-  /// Force a crash (for testing - use only in debug mode)
-  static void crash() {
-    if (kDebugMode && _crashlytics != null) {
-      _crashlytics!.crash();
+  /// Force a crash (for testing)
+  /// Works in both debug and release modes
+  /// Note: Make sure Crashlytics collection is enabled
+  static Future<void> crash() async {
+    if (_crashlytics == null) {
+      if (kDebugMode) {
+        debugPrint('❌ Crashlytics is not initialized. Cannot trigger crash.');
+      }
+      return;
     }
+    
+    // Ensure Crashlytics collection is enabled before crashing
+    try {
+      final isEnabled = await _crashlytics!.isCrashlyticsCollectionEnabled;
+      if (!isEnabled) {
+        await _crashlytics!.setCrashlyticsCollectionEnabled(true);
+        if (kDebugMode) {
+          debugPrint('✅ Crashlytics collection enabled for crash test');
+        }
+        // Wait a bit for the setting to take effect
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('⚠️ Error checking/enabling Crashlytics: $e');
+      }
+    }
+    
+    // Trigger the crash
+    if (kDebugMode) {
+      debugPrint('💥 Triggering test crash...');
+    }
+    _crashlytics!.crash();
   }
 }
 

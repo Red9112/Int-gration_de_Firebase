@@ -5,6 +5,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../auth_provider.dart' as auth;
 import '../../../../services/presence_service.dart';
+import '../../../../services/crashlytics_service.dart';
 import '../../../../features/database/firestore_service.dart';
 import '../../../presence/presentation/screens/online_users_screen.dart';
 import '../../../messaging/presentation/widgets/test_notification_button.dart';
@@ -21,6 +22,43 @@ class HomeScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Accueil'),
         actions: [
+          // 🔴 Bouton TEST Crashlytics
+          IconButton(
+            icon: const Icon(Icons.bug_report),
+            tooltip: 'Tester Crashlytics',
+            onPressed: () async {
+              // Show confirmation dialog before crashing
+              final shouldCrash = await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Test Crashlytics'),
+                  content: const Text(
+                    'Cette action va provoquer un crash de l\'application pour tester Crashlytics.\n\n'
+                    'Le crash sera enregistré dans Firebase Crashlytics.\n\n'
+                    'Voulez-vous continuer ?',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(false),
+                      child: const Text('Annuler'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(true),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.red,
+                      ),
+                      child: const Text('Crash'),
+                    ),
+                  ],
+                ),
+              );
+
+              if (shouldCrash == true) {
+                // Use CrashlyticsService for consistency
+                await CrashlyticsService.crash();
+              }
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
@@ -40,19 +78,24 @@ class HomeScreen extends StatelessWidget {
                 children: [
                   // Option 1: Informations utilisateur complètes
                   _buildUserInfoSection(context, user, firestoreService),
-                  
+
                   const SizedBox(height: 24),
-                  
+
                   // Option 2: Liste des utilisateurs en ligne
                   _buildOnlineUsersButton(context),
-                  
+
                   const SizedBox(height: 16),
-                  
+
                   // Option 3: Bouton test notification
                   const TestNotificationButton(),
-                  
+
                   const SizedBox(height: 16),
-                  
+
+                  // Option 5: Test Crashlytics (Non-fatal error)
+                  _buildCrashlyticsTestSection(context),
+
+                  const SizedBox(height: 16),
+
                   // Option 4: Historique de connexion
                   _buildLoginHistorySection(context, user, firestoreService),
                 ],
@@ -87,7 +130,7 @@ class HomeScreen extends StatelessWidget {
             ),
             const Divider(),
             const SizedBox(height: 8),
-            
+
             // Nom
             _buildInfoRow(
               context,
@@ -95,9 +138,9 @@ class HomeScreen extends StatelessWidget {
               user.displayName ?? 'Non défini',
               Icons.badge,
             ),
-            
+
             const SizedBox(height: 12),
-            
+
             // Email
             _buildInfoRow(
               context,
@@ -105,9 +148,9 @@ class HomeScreen extends StatelessWidget {
               user.email ?? 'N/A',
               Icons.email,
             ),
-            
+
             const SizedBox(height: 12),
-            
+
             // Statut online (Realtime Database)
             StreamBuilder<DatabaseEvent>(
               stream: PresenceService.listenToUserPresence(user.uid),
@@ -131,9 +174,9 @@ class HomeScreen extends StatelessWidget {
                 );
               },
             ),
-            
+
             const SizedBox(height: 12),
-            
+
             // Auth
             _buildInfoRow(
               context,
@@ -142,9 +185,9 @@ class HomeScreen extends StatelessWidget {
               Icons.verified_user,
               color: Colors.green,
             ),
-            
+
             const SizedBox(height: 12),
-            
+
             // Firestore
             StreamBuilder<DocumentSnapshot>(
               stream: firestoreService.streamDocument(
@@ -170,9 +213,9 @@ class HomeScreen extends StatelessWidget {
                 );
               },
             ),
-            
+
             const SizedBox(height: 12),
-            
+
             // Realtime Database (présence)
             StreamBuilder<DatabaseEvent>(
               stream: PresenceService.listenToUserPresence(user.uid),
@@ -281,7 +324,7 @@ class HomeScreen extends StatelessWidget {
             ),
             const Divider(),
             const SizedBox(height: 8),
-            
+
             StreamBuilder<DocumentSnapshot>(
               stream: firestoreService.streamDocument(
                 collection: 'users',
@@ -330,6 +373,79 @@ class HomeScreen extends StatelessWidget {
                   ],
                 );
               },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCrashlyticsTestSection(BuildContext context) {
+    return Card(
+      elevation: 2,
+      color: Colors.orange.shade50,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.bug_report, color: Colors.orange),
+                const SizedBox(width: 8),
+                Text(
+                  'Test Crashlytics',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+              ],
+            ),
+            const Divider(),
+            const SizedBox(height: 8),
+            const Text(
+              'Testez Crashlytics avec une erreur non-fatale (l\'app ne crashera pas)',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton.icon(
+              onPressed: () async {
+                try {
+                  // Test non-fatal error
+                  await CrashlyticsService.recordError(
+                    Exception('Test error from Crashlytics button'),
+                    StackTrace.current,
+                    reason: 'User triggered test error',
+                    fatal: false,
+                  );
+                  
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('✅ Erreur de test envoyée à Crashlytics'),
+                        backgroundColor: Colors.green,
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('❌ Erreur: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              },
+              icon: const Icon(Icons.warning_amber),
+              label: const Text('Tester erreur non-fatale'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              ),
             ),
           ],
         ),
